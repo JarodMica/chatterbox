@@ -489,6 +489,7 @@ class ChatterboxTTS:
         translation_strength=0.7,
         source_language=None,
         force_translation=True,
+        translation_model_path="voice_translator_simplified.pt"
     ):
         if audio_prompt_path:
             self.prepare_conditionals(
@@ -497,7 +498,8 @@ class ChatterboxTTS:
                 translate_to=translate_to, 
                 translation_strength=translation_strength,
                 source_language=source_language,
-                force_translation=force_translation
+                force_translation=force_translation,
+                translation_model_path=translation_model_path
             )
         else:
             assert self.conds is not None, "Please `prepare_conditionals` first or specify `audio_prompt_path`"
