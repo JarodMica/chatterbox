@@ -78,10 +78,17 @@ def generate_speech(
     temperature: float,
     normalize_japanese: bool,
     seed: int,
-    redact: bool
+    redact: bool,
+    translate_to: str,
+    translation_strength: float,
+    source_language: str,
+    enable_language_converions: bool
 ):
     """Generate speech using the TTS model"""
     global tts_model, tts_path
+    if not enable_language_converions:
+        translation_strength = 0
+    
     if seed ==-1:
         seed = random.randint(0, 1000000000)
         print(f"Random seed: {seed}")
@@ -113,7 +120,10 @@ def generate_speech(
             exaggeration=exaggeration,
             cfg_weight=cfg_weight,
             temperature=temperature,
-            redact=redact
+            redact=redact,
+            translate_to=translate_to,
+            translation_strength=translation_strength,
+            source_language=source_language
         )
         
         # Convert to numpy for Gradio
@@ -178,6 +188,31 @@ def create_gradio_interface():
                     label="Voice File",
                     info="Select voice file from voices folder (optional - empty for default)"
                 )
+                enable_language_converions = gr.Checkbox(
+                    label="Enable Language Conversions",
+                    value=True,
+                    info="Enable language conversions"
+                )
+                source_language_dropdown = gr.Dropdown(
+                    choices=["japanese", "english",],
+                    value="japanese",
+                    label="Reference Audio Language",
+                    info="Language of the reference audio"
+                )
+                translate_to_dropdown = gr.Dropdown(
+                    choices=["japanese", "english",],
+                    value="japanese",
+                    label="Desired Language/Accent",
+                    info="Language/accent to inference text with"
+                )
+                translation_strength_slider = gr.Slider(
+                    minimum=0.0,
+                    maximum=5.0,
+                    value=1.0,
+                    step=0.1,
+                    label="Lang Conversion Strength",
+                    info="Strength of conversion (reccomended 1-2)"
+                )
                 
                 refresh_btn = gr.Button("Refresh Dropdowns")
                 
@@ -200,6 +235,7 @@ def create_gradio_interface():
                     value=True,
                     info="Redact text within brackets"
                 )
+                
                 
                 # Inference Parameters
                 gr.Markdown("### Inference Parameters")
@@ -280,7 +316,11 @@ def create_gradio_interface():
                 temperature_slider,
                 normalize_jp_checkbox,
                 seed_input,
-                redact_checkbox
+                redact_checkbox,
+                translate_to_dropdown,
+                translation_strength_slider,
+                source_language_dropdown,
+                enable_language_converions
             ],
             outputs=audio_output
         )

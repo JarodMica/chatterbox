@@ -29,12 +29,12 @@ dependencies = [
     "pyarrow>=20.0.0",
     "tokenizers>=0.21.1",
     "tqdm>=4.67.1",
-    "gradio-utils",
     "fastapi==0.112.1",
     "pydantic==2.6.4",
     "gradio>=4.26.0",
     "langdetect>=1.0.9",
     "webdataset>=0.2.100",
+    "gradio-utils",
 ]
 
 [project.urls]
@@ -46,7 +46,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["chatterbox"]
 
 [project.optional-dependencies]
 cu126 = [
@@ -69,7 +69,7 @@ torch = [
 torchvision = [
   { index = "pytorch-cu126", extra = "cu126" },
 ]
-gradio-utils = { path = "gradio_utils" }
+gradio-utils = { git = "https://github.com/JarodMica/gradio_utils.git" }
 
 [[tool.uv.index]]
 name = "pytorch-cu126"

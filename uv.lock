@@ -688,7 +688,7 @@ requires-dist = [
     { name = "diffusers", specifier = "==0.29.0" },
     { name = "fastapi", specifier = "==0.112.1" },
     { name = "gradio", specifier = ">=4.26.0" },
-    { name = "gradio-utils", directory = "gradio_utils" },
+    { name = "gradio-utils", git = "https://github.com/JarodMica/gradio_utils.git" },
     { name = "langdetect", specifier = ">=1.0.9" },
     { name = "librosa", specifier = "==0.11.0" },
     { name = "numpy", specifier = "~=1.26.0" },
@@ -1374,13 +1374,10 @@ wheels = [
 [[package]]
 name = "gradio-utils"
 version = "1.0"
-source = { directory = "gradio_utils" }
+source = { git = "https://github.com/JarodMica/gradio_utils.git#479be15522d46fb3ac273b09fc2199b6505f4bde" }
 dependencies = [
     { name = "gradio" },
 ]
-
-[package.metadata]
-requires-dist = [{ name = "gradio", specifier = "<5.0.0" }]
 
 [[package]]
 name = "grpcio"

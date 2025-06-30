@@ -2,11 +2,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import librosa
+import numpy as np
 import torch
 import perth
 import torch.nn.functional as F
 from huggingface_hub import hf_hub_download
 from safetensors.torch import load_file
+from sklearn.metrics.pairwise import cosine_similarity
 
 from .models.t3 import T3
 from .models.s3tokenizer import S3_SR, drop_invalid_tokens
@@ -44,10 +46,10 @@ def punc_norm(text: str) -> str:
         ("—", "-"),
         ("–", "-"),
         (" ,", ","),
-        ("“", "\""),
-        ("”", "\""),
-        ("‘", "'"),
-        ("’", "'"),
+        (""", "\""),
+        (""", "\""),
+        ("'", "'"),
+        ("'", "'"),
     ]
     for old_char_sequence, new_char in punc_to_replace:
         text = text.replace(old_char_sequence, new_char)
@@ -394,7 +396,10 @@ class ChatterboxTTS:
 
         return cls.from_local(Path(local_path).parent, device)
 
-    def prepare_conditionals(self, wav_fpath, exaggeration=0.5):
+    def prepare_conditionals(self, wav_fpath, exaggeration=0.5, 
+                           translate_to=None, translation_strength=0.7, 
+                           translation_model_path="Voice_embeddings_study/voice_translator_simplified.pt",
+                           source_language=None, force_translation=False):
         ## Load reference wav
         s3gen_ref_wav, _sr = librosa.load(wav_fpath, sr=S3GEN_SR)
 
@@ -411,7 +416,20 @@ class ChatterboxTTS:
 
         # Voice-encoder speaker embedding
         ve_embed = torch.from_numpy(self.ve.embeds_from_wavs([ref_16k_wav], sample_rate=S3_SR))
-        ve_embed = ve_embed.mean(axis=0, keepdim=True).to(self.device)
+        ve_embed = ve_embed.mean(axis=0, keepdim=True)
+        
+        if translate_to is not None:
+            ve_embed = self._translate_voice_embedding(
+                ve_embed.squeeze(0).cpu().numpy(), 
+                translate_to, 
+                translation_strength, 
+                translation_model_path,
+                source_language=source_language,
+                force_translation=force_translation
+            )
+            ve_embed = torch.from_numpy(ve_embed).unsqueeze(0)
+        
+        ve_embed = ve_embed.to(self.device)
 
         t3_cond = T3Cond(
             speaker_emb=ve_embed,
@@ -419,6 +437,45 @@ class ChatterboxTTS:
             emotion_adv=exaggeration * torch.ones(1, 1, 1),
         ).to(device=self.device)
         self.conds = Conditionals(t3_cond, s3gen_ref_dict)
+
+    def _translate_voice_embedding(self, embedding, target_language, strength, model_path, 
+                                   source_language=None, force_translation=False, 
+                                   similarity_threshold=0.05):
+        data = torch.load(model_path, map_location='cpu')
+        language_centers = {lang: center.numpy() for lang, center in data["language_centers"].items()}
+        language_translators = {key: vector.numpy() for key, vector in data["language_translators"].items()}
+        
+        if source_language is None:
+            similarities = {}
+            for lang, center in language_centers.items():
+                sim = cosine_similarity([embedding], [center])[0][0]
+                similarities[lang] = sim
+            
+            source_language = max(similarities, key=similarities.get)
+            
+            sorted_sims = sorted(similarities.values(), reverse=True)
+            if len(sorted_sims) > 1:
+                similarity_diff = sorted_sims[0] - sorted_sims[1]
+                if similarity_diff < similarity_threshold:
+                    print(f"Warning: Language detection uncertain. Similarity difference: {similarity_diff:.4f}")
+                    if not force_translation:
+                        print(f"Detected language: {source_language}, but confidence is low. Consider setting source_language explicitly.")
+        
+        if source_language == target_language and not force_translation:
+            return embedding
+                
+        target_key = f"to_{target_language}"
+        if target_key not in language_translators:
+            available_translations = list(language_translators.keys())
+            raise ValueError(f"Translation {target_key} not available. Available translations: {available_translations}")
+        
+        target_center = language_translators[target_key]
+        source_center = language_centers[source_language]
+        translation_vector = target_center - source_center
+        translated = embedding + strength * translation_vector
+        translated = translated / np.linalg.norm(translated)
+        
+        return translated
 
     def generate(
         self,
@@ -428,9 +485,20 @@ class ChatterboxTTS:
         cfg_weight=0.5,
         temperature=0.8,
         redact=False,
+        translate_to=None,
+        translation_strength=0.7,
+        source_language=None,
+        force_translation=True,
     ):
         if audio_prompt_path:
-            self.prepare_conditionals(audio_prompt_path, exaggeration=exaggeration)
+            self.prepare_conditionals(
+                audio_prompt_path, 
+                exaggeration=exaggeration, 
+                translate_to=translate_to, 
+                translation_strength=translation_strength,
+                source_language=source_language,
+                force_translation=force_translation
+            )
         else:
             assert self.conds is not None, "Please `prepare_conditionals` first or specify `audio_prompt_path`"
 
