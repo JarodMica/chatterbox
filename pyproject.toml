@@ -48,9 +48,10 @@ build-backend = "setuptools.build_meta"
 where = ["chatterbox"]
 
 [project.optional-dependencies]
-cu126 = [
+cu128 = [
   "torch>=2.7.0",
   "torchvision>=0.22.0",
+  "torchaudio>=2.7.0"
 ]
 beam = [
     "beam-client>=0.2.165",
@@ -66,14 +67,17 @@ override-dependencies = [
 
 [tool.uv.sources]
 torch = [
-  { index = "pytorch-cu126", extra = "cu126" },
+  { index = "pytorch-cu128", extra = "cu128" },
 ]
 torchvision = [
-  { index = "pytorch-cu126", extra = "cu126" },
+  { index = "pytorch-cu128", extra = "cu128" },
+]
+torchaudio = [
+  { index = "pytorch-cu128", extra = "cu128" },
 ]
 gradio-utils = { git = "https://github.com/JarodMica/gradio_utils.git" }
 
 [[tool.uv.index]]
-name = "pytorch-cu126"
-url = "https://download.pytorch.org/whl/cu126"
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
 explicit = true
