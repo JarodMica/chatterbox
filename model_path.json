@@ -1,7 +1,7 @@
 {
-    "voice_encoder_path": "ve.safetensors",
-    "t3_path": "t3_cfg.safetensors",
-    "s3gen_path": "s3gen.safetensors",
-    "tokenizer_path": "tokenizer_jp.json",
-    "conds_path": "conds.pt"
+    "voice_encoder_path": "chatterbox-project/chatterbox_weights/ve.safetensors",
+    "t3_path": "t3_models/ja_34000.safetensors",
+    "s3gen_path": "chatterbox-project/chatterbox_weights/s3gen.safetensors",
+    "tokenizer_path": "tokenizers/tokenizer_ja_en.json",
+    "conds_path": "chatterbox-project/chatterbox_weights/conds.pt"
 }
