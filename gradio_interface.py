@@ -1,3 +1,8 @@
+try:
+    from beam import function, Image, Volume, endpoint
+except:
+    print("Beam not installed, skipping import")
+
 import sys
 from pathlib import Path
 
@@ -72,6 +77,32 @@ def load_tts_model(t3_model_path, tokenizer_path=None, device="cpu"):
         raise gr.Error(f"Failed to load model: {str(e)}")
 
 
+IMAGE = Image(
+    python_version="python3.11",
+    python_packages=[
+        "https://github.com/JarodMica/chatterbox.git"
+    ]
+    ).add_python_packages(
+        [
+            "huggingface_hub",
+            "huggingface_hub[hf-transfer]",
+        ]
+    ).with_envs(
+        "HF_HUB_ENABLE_HF_TRANSFER=1"
+    )
+
+CHATTERBOX_PROJECT = "./chatterbox-project"
+T3_VOLUME = "./t3_models"
+
+@endpoint(
+    image=IMAGE,
+    memory="32gi",
+    cpu=4,
+    gpu="T4",
+    volumes=[Volume(name="chatterbox-project", mount_path=CHATTERBOX_PROJECT), Volume(name="t3_models", mount_path=T3_VOLUME)],
+    keep_warm_seconds=120
+    # timeout=-1
+)
 def generate_speech(
     text: str,
     voice_file: str,
@@ -138,6 +169,66 @@ def generate_speech(
         
     except Exception as e:
         raise gr.Error(f"Generation failed: {str(e)}")
+    
+def generate_proxy(
+    text: str,
+    voice_file: str,
+    t3_model_path: str,
+    tokenizer_path: str,
+    device: str,
+    exaggeration: float,
+    cfg_weight: float,
+    temperature: float,
+    normalize_japanese: bool,
+    seed: int,
+    redact: bool,
+    translate_to: str,
+    translation_strength: float,
+    source_language: str,
+    enable_language_converions: bool,
+    use_beam: bool
+):
+    if use_beam:
+        # Convert Windows paths to Unix paths for Linux server
+        voice_file_unix = voice_file.replace('\\', '/') if voice_file else voice_file
+        t3_model_path_unix = t3_model_path.replace('\\', '/') if t3_model_path else t3_model_path
+        tokenizer_path_unix = tokenizer_path.replace('\\', '/') if tokenizer_path else tokenizer_path
+        
+        return generate_speech.remote(
+            text,
+            voice_file_unix,
+            t3_model_path_unix,
+            tokenizer_path_unix,
+            device,
+            exaggeration,
+            cfg_weight,
+            temperature,
+            normalize_japanese,
+            seed,
+            redact,
+            translate_to,
+            translation_strength,
+            source_language,
+            enable_language_converions
+        )
+    else:
+        return generate_speech.local(
+            text,
+            voice_file,
+            t3_model_path,
+            tokenizer_path,
+            device,
+            exaggeration,
+            cfg_weight,
+            temperature,
+            normalize_japanese,
+            seed,
+            redact,
+            translate_to,
+            translation_strength,
+            source_language,
+            enable_language_converions
+        )
 
 def set_seed(seed: int):
     torch.manual_seed(seed)
@@ -160,6 +251,11 @@ def create_gradio_interface():
         
         with gr.Row():
             with gr.Column():
+                use_beam_checkbox = gr.Checkbox(
+                    label="Use Beam",
+                    value=False,
+                    info="Use Beam for faster generation"
+                )
                 t3_models = get_available_items("t3_models", valid_extensions=[".safetensors"], directory_only=False)
                 tokenizer_files = get_available_items("tokenizers", valid_extensions=[".json"], directory_only=False)
                 voice_files = get_available_items("voices", valid_extensions=[".wav", ".mp3", ".flac", ".m4a"], directory_only=False)
@@ -309,7 +405,7 @@ def create_gradio_interface():
         )
         
         generate_btn.click(
-            fn=generate_speech,
+            fn=generate_proxy,
             inputs=[
                 text_input,
                 voice_dropdown,
@@ -325,7 +421,8 @@ def create_gradio_interface():
                 translate_to_dropdown,
                 translation_strength_slider,
                 source_language_dropdown,
-                enable_language_converions
+                enable_language_converions,
+                use_beam_checkbox
             ],
             outputs=audio_output
         )
