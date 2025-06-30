@@ -9,6 +9,7 @@ import pykakasi
 # Import ChatterboxTTS
 from chatterbox.tts import ChatterboxTTS
 from gradio_utils.utils import *
+import json
 import torch
 import random
 import logging
@@ -40,18 +41,22 @@ def load_tts_model(t3_model_path, tokenizer_path=None, device="cpu"):
     """Load TTS model using from_specified method"""
     global tts_model
     
+    with open("model_path.json", "r") as f:
+        model_path = json.load(f)
+        
+    
     if not t3_model_path or not Path(t3_model_path).exists():
         raise gr.Error("Please select a valid T3 model file")
     
     # Default paths - these would need to be set based on your model structure
-    voice_encoder_path = "chatterbox-project/chatterbox_weights/ve.safetensors"
-    s3gen_path = "chatterbox-project/chatterbox_weights/s3gen.safetensors"
+    voice_encoder_path = model_path["voice_encoder_path"]
+    s3gen_path = model_path["s3gen_path"]
     
     # Use provided tokenizer path or default
     if not tokenizer_path or not Path(tokenizer_path).exists():
-        tokenizer_path = "chatterbox-project/chatterbox_weights/tokenizer.json"
+        tokenizer_path = model_path["tokenizer_path"]
     
-    conds_path = Path("chatterbox-project/chatterbox_weights/conds.pt")
+    conds_path = model_path["conds_path"]
     
     try:
         tts_model = ChatterboxTTS.from_specified(
