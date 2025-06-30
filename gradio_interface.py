@@ -56,7 +56,7 @@ def load_tts_model(t3_model_path, tokenizer_path=None, device="cpu"):
     if not tokenizer_path or not Path(tokenizer_path).exists():
         tokenizer_path = model_path["tokenizer_path"]
     
-    conds_path = model_path["conds_path"]
+    conds_path = Path(model_path["conds_path"])
     
     try:
         tts_model = ChatterboxTTS.from_specified(
