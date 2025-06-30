@@ -24,7 +24,6 @@ dependencies = [
     "peft>=0.15.2",
     "tensorboard>=2.19.0",
     "datasets>=3.6.0",
-    "beam-client==0.2.163",
     "pykakasi>=2.3.0",
     "pyarrow>=20.0.0",
     "tokenizers>=0.21.1",
@@ -52,6 +51,9 @@ where = ["chatterbox"]
 cu126 = [
   "torch>=2.7.0",
   "torchvision>=0.22.0",
+]
+beam = [
+    "beam-client>=0.2.165",
 ]
 
 [tool.uv]

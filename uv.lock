@@ -367,21 +367,21 @@ wheels = [
 
 [[package]]
 name = "beam-client"
-version = "0.2.163"
+version = "0.2.165"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "beta9" },
     { name = "requests" },
     { name = "websockets" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/12/6f/327574a4996bcce7489cdf30e067cfb3549728daf8b3b89c62aeb3fc3532/beam_client-0.2.163.tar.gz", hash = "sha256:effdd2e3485087530c48fd33255b38f9760e7595668a725066f76e14cb3d466b", size = 8175, upload-time = "2025-06-20T20:42:58.021Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/fd/a9/aaf172a8113d93ad718e05df317a07e9bf3f600e6ce9886992d5a3f788e2/beam_client-0.2.165.tar.gz", hash = "sha256:152f25e2bfadf869d73a41df7caecb9686a37a9ffc690922e500e08e652b2ce6", size = 8180, upload-time = "2025-06-23T16:44:50.345Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1d/ab/ff7a595bf896d5c190719f21450b5b784a43cb9ff24480176c4014dd4a51/beam_client-0.2.163-py3-none-any.whl", hash = "sha256:b967f9533a07be297190c1f0a60d7d90cd015184dd1614f8d945580a6c7bd85b", size = 12491, upload-time = "2025-06-20T20:42:57.081Z" },
+    { url = "https://files.pythonhosted.org/packages/e5/12/bce7e6997519457db5efbb1cdcb7d615f6b4ef910cc5988807b0108892ef/beam_client-0.2.165-py3-none-any.whl", hash = "sha256:4caac10d70bfbaaac44582111225d87b913a775c49b2065ccb0fe7356bf6a4a0", size = 12492, upload-time = "2025-06-23T16:44:49.123Z" },
 ]
 
 [[package]]
 name = "beta9"
-version = "0.1.205"
+version = "0.1.207"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "asgiref" },
@@ -405,9 +405,9 @@ dependencies = [
     { name = "websocket-client" },
     { name = "websockets" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/52/e1/a39cfdbd1d1a0e6ef6dc86bc3da5d90338f16902b54ef27692e0570f1f1c/beta9-0.1.205.tar.gz", hash = "sha256:f296c30afd9ea695fedc3bb387baf77403d70dc2701c52e4aa564730e220947d", size = 154974, upload-time = "2025-06-20T20:03:18.328Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/6b/40/059924f2d9ec4e0fb8d94aeca007f48eb38ea901544881fc4158d0eccb7c/beta9-0.1.207.tar.gz", hash = "sha256:418375bcfb93099e50eb9944347a46babdbb12bbd9dc6f3a16f3d3c1329531be", size = 155306, upload-time = "2025-06-23T16:44:23.442Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/eb/04/90477398a4bf8b9fa50a432f2360a85182a254c4f388277264020a59f303/beta9-0.1.205-py3-none-any.whl", hash = "sha256:b6001f7cf05a6e101f82e0e8b4bfd8ec19df4efc2733fb9ec130b4e691e7fb3c", size = 195090, upload-time = "2025-06-20T20:03:16.948Z" },
+    { url = "https://files.pythonhosted.org/packages/68/d4/2e313b23343b710673a3599857f020d820a11eb17decae824bbf9ad94498/beta9-0.1.207-py3-none-any.whl", hash = "sha256:870200f0f34913171fb8814aed86a04186ecf42937ced7004f10014df2ef81c3", size = 195489, upload-time = "2025-06-23T16:44:21.836Z" },
 ]
 
 [[package]]
@@ -645,7 +645,6 @@ name = "chatterbox-tts"
 version = "0.1.2"
 source = { editable = "." }
 dependencies = [
-    { name = "beam-client" },
     { name = "conformer" },
     { name = "datasets" },
     { name = "diffusers" },
@@ -675,6 +674,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+beam = [
+    { name = "beam-client" },
+]
 cu126 = [
     { name = "torch" },
     { name = "torchvision" },
@@ -682,7 +684,7 @@ cu126 = [
 
 [package.metadata]
 requires-dist = [
-    { name = "beam-client", specifier = "==0.2.163" },
+    { name = "beam-client", marker = "extra == 'beam'", specifier = ">=0.2.165" },
     { name = "conformer", specifier = "==0.3.2" },
     { name = "datasets", specifier = ">=3.6.0" },
     { name = "diffusers", specifier = "==0.29.0" },
@@ -711,7 +713,7 @@ requires-dist = [
     { name = "transformers", specifier = ">=4.52.4" },
     { name = "webdataset", specifier = ">=0.2.100" },
 ]
-provides-extras = ["cu126"]
+provides-extras = ["cu126", "beam"]
 
 [[package]]
 name = "click"
