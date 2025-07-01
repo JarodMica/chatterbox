@@ -335,7 +335,7 @@ def launch_new_beam_deployment():
     """Launch a new beam deployment and return endpoint URL and status"""
     try:
         import subprocess
-        result = subprocess.run(['beam', 'deploy', 'gradio_interface.py:generate_speech_beam'], 
+        result = subprocess.run(['uv', 'run', 'beam', 'deploy', 'gradio_interface.py:generate_speech_beam'], 
                               capture_output=True, text=True, timeout=300)
         
         if result.returncode == 0:
@@ -370,7 +370,7 @@ def launch_new_beam_deployment():
             # Always get the actual deployment ID from beam deployment list after deployment
             try:
                 import subprocess
-                list_result = subprocess.run(['beam', 'deployment', 'list'], 
+                list_result = subprocess.run(['uv', 'run', 'beam', 'deployment', 'list'], 
                                            capture_output=True, text=True, timeout=10)
                 if list_result.returncode == 0:
                     list_lines = list_result.stdout.strip().split('\n')
@@ -563,7 +563,7 @@ def check_existing_deployment():
     """Check if there's an existing deployment and return (deployment_id, is_active)"""
     try:
         import subprocess
-        result = subprocess.run(['beam', 'deployment', 'list'], 
+        result = subprocess.run(['uv', 'run', 'beam', 'deployment', 'list'], 
                               capture_output=True, text=True, timeout=30)
         
         if result.returncode == 0:
@@ -594,7 +594,7 @@ def start_deployment(deployment_id):
     """Start an inactive deployment"""
     try:
         import subprocess
-        result = subprocess.run(['beam', 'deployment', 'start', deployment_id], 
+        result = subprocess.run(['uv', 'run', 'beam', 'deployment', 'start', deployment_id], 
                               capture_output=True, text=True, timeout=60)
         
         if result.returncode == 0:
@@ -617,7 +617,7 @@ def smart_beam_deployment():
         import subprocess
         
         # Always check for existing deployments first
-        result = subprocess.run(['beam', 'deployment', 'list'], 
+        result = subprocess.run(['uv', 'run', 'beam', 'deployment', 'list'], 
                               capture_output=True, text=True, timeout=30)
         
         existing_deployments = []
@@ -645,7 +645,7 @@ def smart_beam_deployment():
                 # Stop if active
                 if is_active:
                     logger.info(f"Stopping deployment {deployment_id}")
-                    stop_result = subprocess.run(['beam', 'deployment', 'stop', deployment_id], 
+                    stop_result = subprocess.run(['uv', 'run', 'beam', 'deployment', 'stop', deployment_id], 
                                                capture_output=True, text=True, timeout=60)
                     if stop_result.returncode == 0:
                         result_msg += f"✅ Stopped {deployment_id}\n"
@@ -654,7 +654,7 @@ def smart_beam_deployment():
                 
                 # Delete deployment
                 logger.info(f"Deleting deployment {deployment_id}")
-                delete_result = subprocess.run(['beam', 'deployment', 'delete', deployment_id, '--yes'], 
+                delete_result = subprocess.run(['uv', 'run', 'beam', 'deployment', 'delete', deployment_id, '--yes'], 
                                              capture_output=True, text=True, timeout=60)
                 if delete_result.returncode == 0:
                     result_msg += f"✅ Deleted {deployment_id}\n"
@@ -713,7 +713,7 @@ def recreate_beam_deployment():
             if is_active:
                 logger.info(f"Stopping active deployment {existing_id}")
                 result_msg += "⏹️ Stopping deployment...\n"
-                stop_result = subprocess.run(['beam', 'deployment', 'stop', existing_id], 
+                stop_result = subprocess.run(['uv', 'run', 'beam', 'deployment', 'stop', existing_id], 
                                            capture_output=True, text=True, timeout=60)
                 if stop_result.returncode == 0:
                     result_msg += "✅ Deployment stopped successfully\n"
@@ -725,7 +725,7 @@ def recreate_beam_deployment():
             # Step 3: Delete deployment
             logger.info(f"Deleting deployment {existing_id}")
             result_msg += "🗑️ Deleting deployment...\n"
-            delete_result = subprocess.run(['beam', 'deployment', 'delete', existing_id], 
+            delete_result = subprocess.run(['uv', 'run', 'beam', 'deployment', 'delete', existing_id], 
                                          capture_output=True, text=True, timeout=60)
             if delete_result.returncode == 0:
                 result_msg += "✅ Deployment deleted successfully\n"
@@ -758,7 +758,7 @@ def get_deployment_id():
     """Get the deployment ID for the current endpoint"""
     try:
         import subprocess
-        result = subprocess.run(['beam', 'deployment', 'list'], 
+        result = subprocess.run(['uv', 'run', 'beam', 'deployment', 'list'], 
                               capture_output=True, text=True, timeout=30)
         
         if result.returncode == 0:
@@ -797,7 +797,7 @@ def log_stream_worker():
         import subprocess
         
         process = subprocess.Popen(
-            ['beam', 'logs', '--deployment-id', beam_deployment_id],
+            ['uv', 'run', 'beam', 'logs', '--deployment-id', beam_deployment_id],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -921,10 +921,10 @@ def check_t3_model_exists_in_beam(t3_model_path: str) -> bool:
         model_filename = Path(t3_model_path).name
         logger.info(f"Checking if model {model_filename} exists in beam t3_models")
         
-        subprocess.run(['beam', 'volume', 'create', 't3_models'], 
+        subprocess.run(['uv', 'run', 'beam', 'volume', 'create', 't3_models'], 
                        capture_output=True, text=True, timeout=30)
         
-        result = subprocess.run(['beam', 'ls', 't3_models'], 
+        result = subprocess.run(['uv', 'run', 'beam', 'ls', 't3_models'], 
                               capture_output=True, text=True, timeout=30)
         
         if result.returncode == 0:
