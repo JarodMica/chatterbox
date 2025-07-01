@@ -11,13 +11,13 @@ import pykakasi
 import requests
 import io
 import base64
+import json
 import numpy as np
 import soundfile as sf
 import yaml
 import threading
 import time
 import queue
-from typing import Optional, Dict, Any
 
 # We now use direct file operations instead of gradio_utils
 
@@ -379,18 +379,15 @@ def launch_new_beam_deployment():
             # Always get the actual deployment ID from beam deployment list after deployment
             try:
                 import subprocess
-                list_result = subprocess.run(['uv', 'run', 'beam', 'deployment', 'list'], 
+                list_result = subprocess.run(['uv', 'run', 'beam', 'deployment', 'list', '--format', 'json'], 
                                            capture_output=True, text=True, timeout=10)
                 if list_result.returncode == 0:
-                    list_lines = list_result.stdout.strip().split('\n')
-                    for list_line in list_lines:
-                        if 'chatterbox-inference' in list_line and 'Yes' in list_line:
-                            parts = list_line.strip().split()
-                            if len(parts) > 0:
-                                # The first column is the actual deployment ID (UUID)
-                                deployment_id = parts[0]
-                                logger.info(f"Found deployment ID from list: {deployment_id}")
-                                break
+                    deployments = json.loads(list_result.stdout)
+                    for deployment in deployments:
+                        if deployment.get('name') == 'chatterbox-inference' and deployment.get('active'):
+                            deployment_id = deployment.get('id')
+                            logger.info(f"Found deployment ID from list: {deployment_id}")
+                            break
             except Exception as e:
                 logger.error(f"Failed to get deployment ID from list: {str(e)}")
                 # Fallback: continue with URL-based extraction if it worked
@@ -573,22 +570,21 @@ def check_existing_deployment():
     try:
         import subprocess
         env = get_subprocess_env()
-        result = subprocess.run(['uv', 'run', 'beam', 'deployment', 'list'], 
+        result = subprocess.run(['uv', 'run', 'beam', 'deployment', 'list', '--format', 'json'], 
                               capture_output=True, text=True, timeout=30, env=env, encoding='utf-8')
         
         if result.returncode == 0:
-            lines = result.stdout.strip().split('\n')
+            import json
+            deployments = json.loads(result.stdout)
             
             # Look for chatterbox-inference deployments (active or inactive)
-            for line in lines:
-                if 'chatterbox-inference' in line:
-                    parts = line.strip().split()
-                    if len(parts) >= 3:
-                        deployment_id = parts[0]
-                        name = parts[1]
-                        is_active = parts[2] == 'Yes'
-                        logger.info(f"Found deployment: {deployment_id} ({name}) - Active: {is_active}")
-                        return deployment_id, is_active
+            for deployment in deployments:
+                if deployment.get('name') == 'chatterbox-inference':
+                    deployment_id = deployment.get('id')
+                    name = deployment.get('name')
+                    is_active = deployment.get('active', False)
+                    logger.info(f"Found deployment: {deployment_id} ({name}) - Active: {is_active}")
+                    return deployment_id, is_active
             
             return None, False
         else:
@@ -628,26 +624,22 @@ def smart_beam_deployment():
         
         # Always check for existing deployments first
         env = get_subprocess_env()
-        result = subprocess.run(['uv', 'run', 'beam', 'deployment', 'list'], 
+        result = subprocess.run(['uv', 'run', 'beam', 'deployment', 'list', '--format', 'json'], 
                               capture_output=True, text=True, timeout=30, env=env, encoding='utf-8')
         
         existing_deployments = []
         if result.returncode == 0:
-            lines = result.stdout.strip().split('\n')
+            import json
+            deployments = json.loads(result.stdout)
             
             # Find all chatterbox-inference deployments
-            for line in lines:
-                if 'chatterbox-inference' in line or 'chatte' in line:  # Handle truncated names
-                    # Split and clean up parts, removing any weird characters
-                    parts = [part.strip() for part in line.strip().split() if part.strip()]
-                    if len(parts) >= 3:
-                        deployment_id = parts[0]
-                        # Clean up deployment ID of any weird characters
-                        deployment_id = ''.join(c for c in deployment_id if c.isalnum() or c == '-')
-                        is_active = 'Yes' in line or 'yes' in line
-                        if deployment_id and len(deployment_id) > 10:  # Valid UUID-like ID
-                            existing_deployments.append((deployment_id, is_active))
-                            logger.info(f"Found existing deployment: {deployment_id} - Active: {is_active}")
+            for deployment in deployments:
+                if deployment.get('name') == 'chatterbox-inference':
+                    deployment_id = deployment.get('id')
+                    is_active = deployment.get('active', False)
+                    if deployment_id:
+                        existing_deployments.append((deployment_id, is_active))
+                        logger.info(f"Found existing deployment: {deployment_id} - Active: {is_active}")
         
         # If multiple deployments exist, clean them up
         if len(existing_deployments) > 1:
@@ -669,7 +661,7 @@ def smart_beam_deployment():
                 
                 # Delete deployment
                 logger.info(f"Deleting deployment {deployment_id}")
-                delete_result = subprocess.run(['uv', 'run', 'beam', 'deployment', 'delete', deployment_id, '--yes'], 
+                delete_result = subprocess.run(['uv', 'run', 'beam', 'deployment', 'delete', deployment_id], 
                                              capture_output=True, text=True, timeout=60, env=env, encoding='utf-8')
                 if delete_result.returncode == 0:
                     result_msg += f"✅ Deleted {deployment_id}\n"
@@ -773,22 +765,19 @@ def get_deployment_id():
     """Get the deployment ID for the current endpoint"""
     try:
         import subprocess
-        result = subprocess.run(['uv', 'run', 'beam', 'deployment', 'list'], 
+        result = subprocess.run(['uv', 'run', 'beam', 'deployment', 'list', '--format', 'json'], 
                               capture_output=True, text=True, timeout=30)
         
         if result.returncode == 0:
-            lines = result.stdout.strip().split('\n')
+            import json
+            deployments = json.loads(result.stdout)
             
-            # Find the most recent chatterbox-inference deployment
-            # The format is: ID | Name | Active | Version | Created At | Updated At | Stub Name | Workspace Name
-            for line in lines:
-                if 'chatterbox-inference' in line and 'Yes' in line:
-                    # Split by whitespace and get the first column (ID)
-                    parts = line.strip().split()
-                    if len(parts) > 0:
-                        deployment_id = parts[0]
-                        logger.info(f"Found deployment ID: {deployment_id}")
-                        return deployment_id
+            # Find the most recent active chatterbox-inference deployment
+            for deployment in deployments:
+                if deployment.get('name') == 'chatterbox-inference' and deployment.get('active'):
+                    deployment_id = deployment.get('id')
+                    logger.info(f"Found deployment ID: {deployment_id}")
+                    return deployment_id
             
             return None
         else:
