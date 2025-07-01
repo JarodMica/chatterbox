@@ -58,6 +58,15 @@ CHATTERBOX_PROJECT = "./chatterbox-project"
 T3_VOLUME = "./t3_models"
 
 
+def get_subprocess_env():
+    """Get environment with proper US English UTF-8 locale for subprocess calls"""
+    import os
+    env = os.environ.copy()
+    env['LANG'] = 'en_US.UTF-8'
+    env['LC_ALL'] = 'en_US.UTF-8'
+    return env
+
+
 def normalize_japanese_text(text: str) -> str:
     """Normalize Japanese text to hiragana using pykakasi"""
     if not text:
@@ -563,8 +572,9 @@ def check_existing_deployment():
     """Check if there's an existing deployment and return (deployment_id, is_active)"""
     try:
         import subprocess
+        env = get_subprocess_env()
         result = subprocess.run(['uv', 'run', 'beam', 'deployment', 'list'], 
-                              capture_output=True, text=True, timeout=30)
+                              capture_output=True, text=True, timeout=30, env=env, encoding='utf-8')
         
         if result.returncode == 0:
             lines = result.stdout.strip().split('\n')
@@ -617,8 +627,9 @@ def smart_beam_deployment():
         import subprocess
         
         # Always check for existing deployments first
+        env = get_subprocess_env()
         result = subprocess.run(['uv', 'run', 'beam', 'deployment', 'list'], 
-                              capture_output=True, text=True, timeout=30)
+                              capture_output=True, text=True, timeout=30, env=env, encoding='utf-8')
         
         existing_deployments = []
         if result.returncode == 0:
@@ -626,13 +637,17 @@ def smart_beam_deployment():
             
             # Find all chatterbox-inference deployments
             for line in lines:
-                if 'chatterbox-inference' in line:
-                    parts = line.strip().split()
+                if 'chatterbox-inference' in line or 'chatte' in line:  # Handle truncated names
+                    # Split and clean up parts, removing any weird characters
+                    parts = [part.strip() for part in line.strip().split() if part.strip()]
                     if len(parts) >= 3:
                         deployment_id = parts[0]
-                        is_active = parts[2] == 'Yes'
-                        existing_deployments.append((deployment_id, is_active))
-                        logger.info(f"Found existing deployment: {deployment_id} - Active: {is_active}")
+                        # Clean up deployment ID of any weird characters
+                        deployment_id = ''.join(c for c in deployment_id if c.isalnum() or c == '-')
+                        is_active = 'Yes' in line or 'yes' in line
+                        if deployment_id and len(deployment_id) > 10:  # Valid UUID-like ID
+                            existing_deployments.append((deployment_id, is_active))
+                            logger.info(f"Found existing deployment: {deployment_id} - Active: {is_active}")
         
         # If multiple deployments exist, clean them up
         if len(existing_deployments) > 1:
@@ -646,7 +661,7 @@ def smart_beam_deployment():
                 if is_active:
                     logger.info(f"Stopping deployment {deployment_id}")
                     stop_result = subprocess.run(['uv', 'run', 'beam', 'deployment', 'stop', deployment_id], 
-                                               capture_output=True, text=True, timeout=60)
+                                               capture_output=True, text=True, timeout=60, env=env, encoding='utf-8')
                     if stop_result.returncode == 0:
                         result_msg += f"✅ Stopped {deployment_id}\n"
                     else:
@@ -655,7 +670,7 @@ def smart_beam_deployment():
                 # Delete deployment
                 logger.info(f"Deleting deployment {deployment_id}")
                 delete_result = subprocess.run(['uv', 'run', 'beam', 'deployment', 'delete', deployment_id, '--yes'], 
-                                             capture_output=True, text=True, timeout=60)
+                                             capture_output=True, text=True, timeout=60, env=env, encoding='utf-8')
                 if delete_result.returncode == 0:
                     result_msg += f"✅ Deleted {deployment_id}\n"
                 else:
@@ -921,11 +936,12 @@ def check_t3_model_exists_in_beam(t3_model_path: str) -> bool:
         model_filename = Path(t3_model_path).name
         logger.info(f"Checking if model {model_filename} exists in beam t3_models")
         
+        env = get_subprocess_env()
         subprocess.run(['uv', 'run', 'beam', 'volume', 'create', 't3_models'], 
-                       capture_output=True, text=True, timeout=30)
+                       capture_output=True, text=True, timeout=30, env=env, encoding='utf-8')
         
         result = subprocess.run(['uv', 'run', 'beam', 'ls', 't3_models'], 
-                              capture_output=True, text=True, timeout=30)
+                              capture_output=True, text=True, timeout=30, env=env, encoding='utf-8')
         
         if result.returncode == 0:
             model_exists = model_filename in result.stdout
