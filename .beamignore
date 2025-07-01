@@ -14,3 +14,4 @@ emilia_ja_text_data.txt
 emilia_ja_text_preprocessed.txt
 tokenizer_scripts/
 t3_models/
+Voice_embeddings_study/
