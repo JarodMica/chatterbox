@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
+import logging
 
 import librosa
 import numpy as np
@@ -16,9 +17,63 @@ from .models.s3gen import S3GEN_SR, S3Gen
 from .models.tokenizers import EnTokenizer
 from .models.voice_encoder import VoiceEncoder
 from .models.t3.modules.cond_enc import T3Cond
+from .models.t3.modules.t3_config import T3Config
 
 
 REPO_ID = "ResembleAI/chatterbox"
+
+
+def smart_load_t3_model(t3_state_dict, device="cpu"):
+    """
+    Smart loading function that automatically detects and adjusts T3Config 
+    based on the checkpoint dimensions, particularly text_tokens_dict_size.
+    """
+    logger = logging.getLogger(__name__)
+    
+    # Try loading with default config first
+    config = T3Config()
+    t3 = T3(config)
+    
+    try:
+        t3.load_state_dict(t3_state_dict)
+        logger.info(f"Successfully loaded T3 model with default config (text_tokens_dict_size={config.text_tokens_dict_size})")
+        return t3.to(device).eval()
+    except RuntimeError as e:
+        error_msg = str(e)
+        logger.warning(f"Initial loading failed with default config: {error_msg}")
+        
+        # Check if it's a size mismatch error for text embeddings
+        if "text_emb.weight" in error_msg and "size mismatch" in error_msg:
+            # Parse the error to extract the correct size
+            import re
+            # Look for pattern like "torch.Size([704, 1024])" in the error message
+            checkpoint_size_match = re.search(r'copying a param with shape torch\.Size\(\[(\d+), \d+\]\)', error_msg)
+            
+            if checkpoint_size_match:
+                correct_text_tokens_dict_size = int(checkpoint_size_match.group(1))
+                logger.info(f"Detected correct text_tokens_dict_size from checkpoint: {correct_text_tokens_dict_size}")
+                
+                # Create new config with correct size
+                corrected_config = T3Config()
+                corrected_config.text_tokens_dict_size = correct_text_tokens_dict_size
+                
+                # Create new model with corrected config
+                t3_corrected = T3(corrected_config)
+                
+                try:
+                    t3_corrected.load_state_dict(t3_state_dict)
+                    logger.info(f"Successfully loaded T3 model with corrected config (text_tokens_dict_size={correct_text_tokens_dict_size})")
+                    return t3_corrected.to(device).eval()
+                except RuntimeError as retry_error:
+                    logger.error(f"Failed to load even with corrected config: {retry_error}")
+                    raise retry_error
+            else:
+                logger.error(f"Could not parse checkpoint size from error message: {error_msg}")
+                raise e
+        else:
+            # Different type of error, re-raise
+            logger.error(f"Non-size-mismatch error during loading: {error_msg}")
+            raise e
 
 
 def punc_norm(text: str) -> str:
@@ -310,14 +365,14 @@ class ChatterboxTTS:
         )
         ve.to(device).eval()
 
-        t3 = T3()
+        # Load T3 model with smart loading
         t3_state = load_file(ckpt_dir / "t3_cfg.safetensors")
         # if "model" in t3_state.keys():
         #     t3_state = t3_state["model"][0]
         if any(k.startswith("t3.") for k in t3_state):
             t3_state = {k[len("t3."):]: v for k, v in t3_state.items()}
-        t3.load_state_dict(t3_state)
-        t3.to(device).eval()
+        
+        t3 = smart_load_t3_model(t3_state, device)
 
         s3gen = S3Gen()
         s3gen.load_state_dict(
@@ -356,14 +411,14 @@ class ChatterboxTTS:
         )
         ve.to(device).eval()
 
-        t3 = T3()
+        # Load T3 model with smart loading
         t3_state = load_file(t3_path)
         # if "model" in t3_state.keys():
         #     t3_state = t3_state["model"][0]
         if any(k.startswith("t3.") for k in t3_state):
             t3_state = {k[len("t3."):]: v for k, v in t3_state.items()}
-        t3.load_state_dict(t3_state)
-        t3.to(device).eval()
+        
+        t3 = smart_load_t3_model(t3_state, device)
 
         s3gen = S3Gen()
         s3gen.load_state_dict(

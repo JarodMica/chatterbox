@@ -285,8 +285,13 @@ def generate_proxy(
     translation_strength: float,
     source_language: str,
     enable_language_converions: bool,
-    use_beam: bool
+    use_beam: bool,
+    use_default_models: bool
 ):
+    if use_default_models:
+        t3_model_path = os.path.join(CHATTERBOX_PROJECT, "chatterbox_weights/t3_cfg.safetensors")
+        tokenizer_path = os.path.join(CHATTERBOX_PROJECT, "chatterbox_weights/tokenizer.json")
+        
     if use_beam:
         assert t3_model_path, "t3_model_path is required for beam inference"
         
@@ -1014,8 +1019,11 @@ def create_gradio_interface():
                     label="T3 Model",
                     info="Select a T3 model file from t3_models folder"
                 )
-                
-
+                use_default_models_checkbox = gr.Checkbox(
+                    label="Use Default Models",
+                    value=False,
+                    info="Turn on to use base Chatterbox Model"
+                )
                 
                 tokenizer_dropdown = gr.Dropdown(
                     choices=tokenizer_files,
@@ -1251,7 +1259,8 @@ def create_gradio_interface():
                 translation_strength_slider,
                 source_language_dropdown,
                 enable_language_converions,
-                use_beam_checkbox
+                use_beam_checkbox,
+                use_default_models_checkbox
             ],
             outputs=audio_output
         )
