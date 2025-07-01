@@ -610,43 +610,88 @@ def start_deployment(deployment_id):
 
 
 def smart_beam_deployment():
-    """Smart deployment: use existing if available, create new if needed"""
+    """Smart deployment: clean up existing deployments and create new one"""
     global beam_endpoint_url, beam_auth_token, beam_deployment_id
     
-    # First, try to load from saved file
-    if load_beam_deployment_info():
-        # Verify the loaded deployment still exists and check its status
-        if beam_deployment_id:
-            existing_id, is_active = check_existing_deployment()
-            if existing_id == beam_deployment_id:
-                if is_active:
-                    return f"✅ Using existing deployment!\nEndpoint: {beam_endpoint_url}\nDeployment ID: {beam_deployment_id}\nLoaded from beam_deployment.yaml"
-                else:
-                    # Deployment exists but is inactive, try to start it
-                    success, output = start_deployment(beam_deployment_id)
-                    if success:
-                        return f"✅ Restarted existing deployment!\nEndpoint: {beam_endpoint_url}\nDeployment ID: {beam_deployment_id}\nRestart output:\n{output}"
-                    else:
-                        return f"❌ Failed to restart deployment {beam_deployment_id}:\n{output}\n\nTrying to create new deployment..."
-    
-    # Check if there are any deployments (active or inactive)
-    existing_id, is_active = check_existing_deployment()
-    if existing_id:
-        beam_deployment_id = existing_id
+    try:
+        import subprocess
         
-        if is_active:
-            # Active deployment found but we don't have the URL/token saved
-            return f"✅ Found active deployment!\nDeployment ID: {existing_id}\n⚠️ You may need to redeploy to capture endpoint URL and auth token for full functionality."
-        else:
-            # Inactive deployment found, try to start it
-            success, output = start_deployment(existing_id)
-            if success:
-                return f"✅ Restarted existing deployment!\nDeployment ID: {existing_id}\nRestart output:\n{output}\n⚠️ You may need to redeploy to capture endpoint URL and auth token."
+        # Always check for existing deployments first
+        result = subprocess.run(['beam', 'deployment', 'list'], 
+                              capture_output=True, text=True, timeout=30)
+        
+        existing_deployments = []
+        if result.returncode == 0:
+            lines = result.stdout.strip().split('\n')
+            
+            # Find all chatterbox-inference deployments
+            for line in lines:
+                if 'chatterbox-inference' in line:
+                    parts = line.strip().split()
+                    if len(parts) >= 3:
+                        deployment_id = parts[0]
+                        is_active = parts[2] == 'Yes'
+                        existing_deployments.append((deployment_id, is_active))
+                        logger.info(f"Found existing deployment: {deployment_id} - Active: {is_active}")
+        
+        # If multiple deployments exist, clean them up
+        if len(existing_deployments) > 1:
+            logger.info(f"Found {len(existing_deployments)} existing deployments, cleaning up...")
+            result_msg = f"🧹 Found {len(existing_deployments)} existing deployments, cleaning up...\n\n"
+            
+            for deployment_id, is_active in existing_deployments:
+                result_msg += f"Processing deployment: {deployment_id}\n"
+                
+                # Stop if active
+                if is_active:
+                    logger.info(f"Stopping deployment {deployment_id}")
+                    stop_result = subprocess.run(['beam', 'deployment', 'stop', deployment_id], 
+                                               capture_output=True, text=True, timeout=60)
+                    if stop_result.returncode == 0:
+                        result_msg += f"✅ Stopped {deployment_id}\n"
+                    else:
+                        result_msg += f"⚠️ Failed to stop {deployment_id}: {stop_result.stderr}\n"
+                
+                # Delete deployment
+                logger.info(f"Deleting deployment {deployment_id}")
+                delete_result = subprocess.run(['beam', 'deployment', 'delete', deployment_id, '--yes'], 
+                                             capture_output=True, text=True, timeout=60)
+                if delete_result.returncode == 0:
+                    result_msg += f"✅ Deleted {deployment_id}\n"
+                else:
+                    result_msg += f"⚠️ Failed to delete {deployment_id}: {delete_result.stderr}\n"
+            
+            result_msg += "\n🚀 Creating fresh deployment...\n"
+            new_deployment_result = launch_new_beam_deployment()
+            return result_msg + new_deployment_result
+        
+        # Single deployment exists - use existing logic
+        elif len(existing_deployments) == 1:
+            deployment_id, is_active = existing_deployments[0]
+            beam_deployment_id = deployment_id
+            
+            if is_active:
+                # Try to load saved info for this deployment
+                if load_beam_deployment_info() and beam_deployment_id == deployment_id:
+                    return f"✅ Using existing deployment!\nEndpoint: {beam_endpoint_url}\nDeployment ID: {beam_deployment_id}"
+                else:
+                    return f"✅ Found active deployment!\nDeployment ID: {deployment_id}\n⚠️ You may need to redeploy to capture endpoint URL and auth token for full functionality."
             else:
-                return f"❌ Failed to restart deployment {existing_id}:\n{output}\n\nTrying to create new deployment...\n\n" + launch_new_beam_deployment()
-    
-    # No existing deployment found, create a new one
-    return launch_new_beam_deployment()
+                # Try to restart inactive deployment
+                success, output = start_deployment(deployment_id)
+                if success:
+                    return f"✅ Restarted existing deployment!\nDeployment ID: {deployment_id}\nRestart output:\n{output}"
+                else:
+                    return f"❌ Failed to restart deployment {deployment_id}:\n{output}\n\nCreating new deployment...\n\n" + launch_new_beam_deployment()
+        
+        # No existing deployments found
+        else:
+            logger.info("No existing deployments found, creating new one")
+            return launch_new_beam_deployment()
+            
+    except Exception as e:
+        logger.error(f"Error in smart deployment: {str(e)}")
+        return f"❌ Error checking deployments: {str(e)}\n\nTrying to create new deployment...\n\n" + launch_new_beam_deployment()
 
 
 def recreate_beam_deployment():
