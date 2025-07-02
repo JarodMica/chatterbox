@@ -18,10 +18,8 @@ import yaml
 import threading
 import time
 import queue
+import os
 
-# We now use direct file operations instead of gradio_utils
-
-# Import ChatterboxTTS
 from chatterbox.tts import ChatterboxTTS
 from gradio_utils.utils import *
 import json
@@ -59,7 +57,6 @@ T3_VOLUME = "./t3_models"
 
 
 def get_subprocess_env():
-    """Get environment with proper US English UTF-8 locale for subprocess calls"""
     import os
     env = os.environ.copy()
     env['LANG'] = 'en_US.UTF-8'
@@ -68,17 +65,14 @@ def get_subprocess_env():
 
 
 def normalize_japanese_text(text: str) -> str:
-    """Normalize Japanese text to hiragana using pykakasi"""
     if not text:
         return text
     
-    # Convert to hiragana
     hiragana_text = conv.do(text)
     return hiragana_text
 
 
 def load_tts_model(t3_model_path, tokenizer_path=None, device="cpu"):
-    """Load TTS model using from_specified method"""
     global tts_model
     
     with open("model_path.json", "r") as f:
@@ -88,11 +82,9 @@ def load_tts_model(t3_model_path, tokenizer_path=None, device="cpu"):
     if not t3_model_path or not Path(t3_model_path).exists():
         raise gr.Error("Please select a valid T3 model file")
     
-    # Default paths - these would need to be set based on your model structure
     voice_encoder_path = model_path["voice_encoder_path"]
     s3gen_path = model_path["s3gen_path"]
     
-    # Use provided tokenizer path or default
     if not tokenizer_path or not Path(tokenizer_path).exists():
         tokenizer_path = model_path["tokenizer_path"]
     
@@ -125,8 +117,6 @@ IMAGE = Image(
     ).with_envs(
         "HF_HUB_ENABLE_HF_TRANSFER=1"
     )
-
-
 
 @endpoint(
     name="chatterbox-inference",
@@ -288,15 +278,17 @@ def generate_proxy(
     use_beam: bool,
     use_default_models: bool
 ):
+    default_used = False
     if use_default_models:
+        default_used = True
         t3_model_path = os.path.join(CHATTERBOX_PROJECT, "chatterbox_weights/t3_cfg.safetensors")
         tokenizer_path = os.path.join(CHATTERBOX_PROJECT, "chatterbox_weights/tokenizer.json")
         
     if use_beam:
         assert t3_model_path, "t3_model_path is required for beam inference"
         
-        logger.info(f"Validating model exists in beam for: {t3_model_path}")
-        if not check_t3_model_exists_in_beam(t3_model_path):
+        if not check_t3_model_exists_in_beam(t3_model_path) and not default_used:
+            logger.info(f"Validating model exists in beam for: {t3_model_path}")
             raise gr.Error('Model needs to be uploaded first! Click "Get Upload Command" and copy and paste the command into your terminal')
         
         # Convert Windows paths to Unix paths for Linux server
@@ -346,14 +338,12 @@ def set_seed(seed: int):
     torch.cuda.manual_seed_all(seed)
 
 def launch_new_beam_deployment():
-    """Launch a new beam deployment and return endpoint URL and status"""
     try:
         import subprocess
         result = subprocess.run(['uv', 'run', 'beam', 'deploy', 'gradio_interface.py:generate_speech_beam'], 
                               capture_output=True, text=True, timeout=300)
         
         if result.returncode == 0:
-            # Parse the output to extract the endpoint URL, bearer token, and deployment ID
             lines = result.stdout.split('\n')
             endpoint_url = None
             bearer_token = None
@@ -361,7 +351,6 @@ def launch_new_beam_deployment():
             
             for line in lines:
                 if 'https://' in line and 'app.beam.cloud' in line:
-                    # Extract URL from curl command
                     if 'curl' in line:
                         url_start = line.find('https://')
                         url_end = line.find("'", url_start)
@@ -371,7 +360,6 @@ def launch_new_beam_deployment():
                             url_end = len(line)
                         endpoint_url = line[url_start:url_end]
                 
-                # Extract bearer token from Authorization header
                 if 'Authorization: Bearer' in line:
                     token_start = line.find('Bearer ') + 7
                     token_end = line.find("'", token_start)
@@ -395,9 +383,7 @@ def launch_new_beam_deployment():
                             break
             except Exception as e:
                 logger.error(f"Failed to get deployment ID from list: {str(e)}")
-                # Fallback: continue with URL-based extraction if it worked
             
-            # Store the extracted values globally
             global beam_endpoint_url, beam_auth_token, beam_deployment_id
             if endpoint_url:
                 beam_endpoint_url = endpoint_url
@@ -412,7 +398,6 @@ def launch_new_beam_deployment():
             if deployment_id:
                 status_msg += f"\nDeployment ID: {deployment_id}"
             
-            # Save deployment info to file
             save_beam_deployment_info()
             status_msg += f"\nDeployment info saved to beam_deployment.yaml"
             status_msg += f"\n\nFull output:\n{result.stdout}"
@@ -448,15 +433,10 @@ def call_beam_endpoint(
     
     assert t3_model_path, "t3_model_path is required for beam endpoint"
     
-    logger.info(f"Double-checking model exists in beam before endpoint call: {t3_model_path}")
-    if not check_t3_model_exists_in_beam(t3_model_path):
-        raise gr.Error("Model needs to be uploaded first, click the upload model if you'd like to upload the model first and it'll upload it to the proper location")
-    
     if not beam_endpoint_url:
         raise gr.Error("Beam endpoint not deployed. Please launch beam deployment first.")
     
     # Get auth token from environment or prompt user
-    import os
     if not beam_auth_token:
         beam_auth_token = os.getenv('BEAM_AUTH_TOKEN')
         if not beam_auth_token:
@@ -468,7 +448,6 @@ def call_beam_endpoint(
         "Authorization": f"Bearer {beam_auth_token}",
     }
     
-    # Prepare the payload
     data = {
         "text": text,
         "voice_file": voice_file,
@@ -529,7 +508,6 @@ def call_beam_endpoint(
 
 
 def save_beam_deployment_info():
-    """Save beam deployment info to YAML file"""
     global beam_endpoint_url, beam_auth_token, beam_deployment_id
     
     from datetime import datetime
@@ -550,7 +528,6 @@ def save_beam_deployment_info():
 
 
 def load_beam_deployment_info():
-    """Load beam deployment info from YAML file"""
     global beam_endpoint_url, beam_auth_token, beam_deployment_id
     
     try:
@@ -571,7 +548,6 @@ def load_beam_deployment_info():
 
 
 def check_existing_deployment():
-    """Check if there's an existing deployment and return (deployment_id, is_active)"""
     try:
         import subprocess
         env = get_subprocess_env()
@@ -602,7 +578,6 @@ def check_existing_deployment():
 
 
 def start_deployment(deployment_id):
-    """Start an inactive deployment"""
     try:
         import subprocess
         result = subprocess.run(['uv', 'run', 'beam', 'deployment', 'start', deployment_id], 
@@ -621,7 +596,6 @@ def start_deployment(deployment_id):
 
 
 def smart_beam_deployment():
-    """Smart deployment: clean up existing deployments and create new one"""
     global beam_endpoint_url, beam_auth_token, beam_deployment_id
     
     try:
@@ -646,7 +620,6 @@ def smart_beam_deployment():
                         existing_deployments.append((deployment_id, is_active))
                         logger.info(f"Found existing deployment: {deployment_id} - Active: {is_active}")
         
-        # If multiple deployments exist, clean them up
         if len(existing_deployments) > 1:
             logger.info(f"Found {len(existing_deployments)} existing deployments, cleaning up...")
             result_msg = f"🧹 Found {len(existing_deployments)} existing deployments, cleaning up...\n\n"
@@ -654,7 +627,6 @@ def smart_beam_deployment():
             for deployment_id, is_active in existing_deployments:
                 result_msg += f"Processing deployment: {deployment_id}\n"
                 
-                # Stop if active
                 if is_active:
                     logger.info(f"Stopping deployment {deployment_id}")
                     stop_result = subprocess.run(['uv', 'run', 'beam', 'deployment', 'stop', deployment_id], 
@@ -664,7 +636,6 @@ def smart_beam_deployment():
                     else:
                         result_msg += f"⚠️ Failed to stop {deployment_id}: {stop_result.stderr}\n"
                 
-                # Delete deployment
                 logger.info(f"Deleting deployment {deployment_id}")
                 delete_result = subprocess.run(['uv', 'run', 'beam', 'deployment', 'delete', deployment_id], 
                                              capture_output=True, text=True, timeout=60, env=env, encoding='utf-8')
@@ -677,26 +648,22 @@ def smart_beam_deployment():
             new_deployment_result = launch_new_beam_deployment()
             return result_msg + new_deployment_result
         
-        # Single deployment exists - use existing logic
         elif len(existing_deployments) == 1:
             deployment_id, is_active = existing_deployments[0]
             beam_deployment_id = deployment_id
             
             if is_active:
-                # Try to load saved info for this deployment
                 if load_beam_deployment_info() and beam_deployment_id == deployment_id:
                     return f"✅ Using existing deployment!\nEndpoint: {beam_endpoint_url}\nDeployment ID: {beam_deployment_id}"
                 else:
                     return f"✅ Found active deployment!\nDeployment ID: {deployment_id}\n⚠️ You may need to redeploy to capture endpoint URL and auth token for full functionality."
             else:
-                # Try to restart inactive deployment
                 success, output = start_deployment(deployment_id)
                 if success:
                     return f"✅ Restarted existing deployment!\nDeployment ID: {deployment_id}\nRestart output:\n{output}"
                 else:
                     return f"❌ Failed to restart deployment {deployment_id}:\n{output}\n\nCreating new deployment...\n\n" + launch_new_beam_deployment()
         
-        # No existing deployments found
         else:
             logger.info("No existing deployments found, creating new one")
             return launch_new_beam_deployment()
@@ -707,7 +674,6 @@ def smart_beam_deployment():
 
 
 def recreate_beam_deployment():
-    """Recreate beam deployment by stopping, deleting, and creating new deployment"""
     global beam_endpoint_url, beam_auth_token, beam_deployment_id
     
     try:
@@ -716,12 +682,10 @@ def recreate_beam_deployment():
         logger.info("Starting deployment recreation process")
         result_msg = "🔄 Recreating Beam Deployment...\n\n"
         
-        # Step 1: Find existing deployment
         existing_id, is_active = check_existing_deployment()
         if existing_id:
             result_msg += f"Found existing deployment: {existing_id}\n"
             
-            # Step 2: Stop deployment if active
             if is_active:
                 logger.info(f"Stopping active deployment {existing_id}")
                 result_msg += "⏹️ Stopping deployment...\n"
@@ -734,7 +698,6 @@ def recreate_beam_deployment():
                     result_msg += f"⚠️ Failed to stop deployment: {stop_result.stderr}\n"
                     logger.warning(f"Failed to stop deployment {existing_id}: {stop_result.stderr}")
             
-            # Step 3: Delete deployment
             logger.info(f"Deleting deployment {existing_id}")
             result_msg += "🗑️ Deleting deployment...\n"
             delete_result = subprocess.run(['uv', 'run', 'beam', 'deployment', 'delete', existing_id], 
@@ -749,12 +712,10 @@ def recreate_beam_deployment():
             result_msg += "No existing deployment found\n"
             logger.info("No existing deployment found to recreate")
         
-        # Step 4: Clear saved deployment info
         beam_endpoint_url = None
         beam_auth_token = None
         beam_deployment_id = None
         
-        # Step 5: Create new deployment
         result_msg += "\n🚀 Creating new deployment...\n"
         logger.info("Creating new deployment")
         new_deployment_result = launch_new_beam_deployment()
@@ -767,7 +728,6 @@ def recreate_beam_deployment():
 
 
 def get_deployment_id():
-    """Get the deployment ID for the current endpoint"""
     try:
         import subprocess
         result = subprocess.run(['uv', 'run', 'beam', 'deployment', 'list', '--format', 'json'], 
@@ -795,7 +755,6 @@ def get_deployment_id():
 
 
 def log_stream_worker():
-    """Worker thread that streams logs continuously"""
     global log_stream_active, beam_deployment_id, log_queue
     
     if not beam_deployment_id:
@@ -823,7 +782,6 @@ def log_stream_worker():
             else:
                 time.sleep(0.1)  # Small delay to prevent busy waiting
         
-        # Clean up
         if process.poll() is None:
             process.terminate()
             try:
@@ -841,7 +799,6 @@ def log_stream_worker():
 
 
 def start_log_stream():
-    """Start streaming logs"""
     global log_stream_thread, log_stream_active
     
     if not beam_deployment_id:
@@ -859,7 +816,6 @@ def start_log_stream():
 
 
 def stop_log_stream():
-    """Stop streaming logs"""
     global log_stream_active
     
     if not log_stream_active:
@@ -870,13 +826,10 @@ def stop_log_stream():
 
 
 def get_streaming_logs():
-    """Get accumulated logs from the queue and maintain 1000-line history"""
     global log_queue, log_history
     
     new_logs = []
-    max_history = 1000  # Keep last 1000 lines for scrolling
     
-    # Get all available log lines
     while not log_queue.empty():
         try:
             line = log_queue.get_nowait()
@@ -884,15 +837,14 @@ def get_streaming_logs():
         except queue.Empty:
             break
     
+    max_history = 1000
     if new_logs:
-        # Add new logs to history
         log_history.extend(new_logs)
         
         # Trim history to maintain 1000-line window
         if len(log_history) > max_history:
             log_history = log_history[-max_history:]
     
-    # Return the current log history
     if log_history:
         if len(log_history) == max_history:
             result = f"... (showing last {max_history} lines)\n" + "\n".join(log_history)
@@ -900,28 +852,24 @@ def get_streaming_logs():
             result = "\n".join(log_history)
         return result
     
-    return ""  # Return empty if no logs
+    return ""
 
 
 def clear_logs_display():
-    """Clear the logs display, queue, and history"""
     global log_queue, log_history
     
-    # Clear the queue
     while not log_queue.empty():
         try:
             log_queue.get_nowait()
         except queue.Empty:
             break
     
-    # Clear the log history
     log_history.clear()
     
     return ""
 
 
 def check_t3_model_exists_in_beam(t3_model_path: str) -> bool:
-    """Check if the t3 model exists in beam t3_models directory"""
     assert t3_model_path, "t3_model_path cannot be empty"
     
     try:
@@ -990,14 +938,11 @@ def upload_t3_model_to_beam(t3_model_path: str) -> str:
 
 
 def create_gradio_interface():
-    """Create and return the Gradio interface"""
     
-    # Create directories if they don't exist
     Path("voices").mkdir(exist_ok=True)
     Path("t3_models").mkdir(exist_ok=True)
     Path("tokenizers").mkdir(exist_ok=True)
     
-    # Load existing beam deployment info if available
     load_beam_deployment_info()
     
     with gr.Blocks(title="Chatterbox TTS") as interface:
