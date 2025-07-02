@@ -498,7 +498,6 @@ class ChatterboxTTS:
                                    similarity_threshold=0.05):
         data = torch.load(model_path, map_location='cpu')
         language_centers = {lang: center.numpy() for lang, center in data["language_centers"].items()}
-        language_translators = {key: vector.numpy() for key, vector in data["language_translators"].items()}
         
         if source_language is None:
             similarities = {}
@@ -519,12 +518,11 @@ class ChatterboxTTS:
         if source_language == target_language and not force_translation:
             return embedding
                 
-        target_key = f"to_{target_language}"
-        if target_key not in language_translators:
-            available_translations = list(language_translators.keys())
-            raise ValueError(f"Translation {target_key} not available. Available translations: {available_translations}")
+        if target_language not in language_centers:
+            available_languages = list(language_centers.keys())
+            raise ValueError(f"Target language '{target_language}' not available. Available languages: {available_languages}")
         
-        target_center = language_translators[target_key]
+        target_center = language_centers[target_language]
         source_center = language_centers[source_language]
         translation_vector = target_center - source_center
         translated = embedding + strength * translation_vector
