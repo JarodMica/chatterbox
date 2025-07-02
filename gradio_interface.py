@@ -1229,7 +1229,6 @@ def create_gradio_interface():
 
 
 def launch_gradio_app(share=False, server_port=7860):
-    """Launch the Gradio application"""
     try:
         demo = create_gradio_interface()
         demo.launch(share=share, server_port=server_port)
