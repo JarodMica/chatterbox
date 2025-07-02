@@ -997,13 +997,13 @@ def create_gradio_interface():
                     info="Enable language conversions"
                 )
                 source_language_dropdown = gr.Dropdown(
-                    choices=["japanese", "english",],
-                    value="japanese",
+                    choices=["japanese", "english"],
+                    value="english",
                     label="Reference Audio Language",
                     info="Language of the reference audio"
                 )
                 translate_to_dropdown = gr.Dropdown(
-                    choices=["japanese", "english",],
+                    choices=["japanese", "english"],
                     value="japanese",
                     label="Desired Language/Accent",
                     info="Language/accent to inference text with"
