@@ -1,5 +1,18 @@
 try:
     from beam import function, Image, Volume, endpoint
+    IMAGE = Image(
+    python_version="python3.11",
+    python_packages=[
+        "https://github.com/JarodMica/chatterbox.git"
+    ]
+    ).add_python_packages(
+        [
+            "huggingface_hub",
+            "huggingface_hub[hf-transfer]",
+        ]
+    ).with_envs(
+        "HF_HUB_ENABLE_HF_TRANSFER=1"
+    )
 except:
     print("Beam not installed, skipping import")
 
@@ -104,100 +117,91 @@ def load_tts_model(t3_model_path, tokenizer_path=None, device="cpu"):
         raise gr.Error(f"Failed to load model: {str(e)}")
 
 
-IMAGE = Image(
-    python_version="python3.11",
-    python_packages=[
-        "https://github.com/JarodMica/chatterbox.git"
-    ]
-    ).add_python_packages(
-        [
-            "huggingface_hub",
-            "huggingface_hub[hf-transfer]",
-        ]
-    ).with_envs(
-        "HF_HUB_ENABLE_HF_TRANSFER=1"
-    )
 
-@endpoint(
-    name="chatterbox-inference",
-    image=IMAGE,
-    memory=BEAM_MEMORY,
-    cpu=BEAM_CPU,
-    gpu=BEAM_GPU,
-    volumes=[Volume(name="chatterbox-project", mount_path=CHATTERBOX_PROJECT), Volume(name="t3_models", mount_path=T3_VOLUME)],
-    keep_warm_seconds=120
-    # timeout=-1
-)
-def generate_speech_beam(
-    text: str,
-    voice_file: str,
-    t3_model_path: str,
-    tokenizer_path: str,
-    device: str,
-    exaggeration: float,
-    cfg_weight: float,
-    temperature: float,
-    normalize_japanese: bool,
-    seed: int,
-    redact: bool,
-    translate_to: str,
-    translation_strength: float,
-    source_language: str,
-    enable_language_converions: bool
-):
-    """Generate speech using the TTS model"""
-    global tts_model, tts_path
-    if not enable_language_converions:
-        translation_strength = 0
-    
-    if seed ==-1:
-        seed = random.randint(0, 1000000000)
-        print(f"Random seed: {seed}")
-    else:
-        seed = int(seed)
+try:
+    @endpoint(
+        name="chatterbox-inference",
+        image=IMAGE,
+        memory=BEAM_MEMORY,
+        cpu=BEAM_CPU,
+        gpu=BEAM_GPU,
+        volumes=[Volume(name="chatterbox-project", mount_path=CHATTERBOX_PROJECT), Volume(name="t3_models", mount_path=T3_VOLUME)],
+        keep_warm_seconds=120
+        # timeout=-1
+    )
+    def generate_speech_beam(
+        text: str,
+        voice_file: str,
+        t3_model_path: str,
+        tokenizer_path: str,
+        device: str,
+        exaggeration: float,
+        cfg_weight: float,
+        temperature: float,
+        normalize_japanese: bool,
+        seed: int,
+        redact: bool,
+        translate_to: str,
+        translation_strength: float,
+        source_language: str,
+        enable_language_converions: bool
+    ):
+        """Generate speech using the TTS model"""
+        global tts_model, tts_path
+        if not enable_language_converions:
+            translation_strength = 0
         
-    set_seed(seed)
-    
-    if not text.strip():
-        raise gr.Error("Please enter text to generate")
-    
-    # Load model if not already loaded or if model path changed
-    if tts_model is None or tts_path != t3_model_path:
-        tts_path = t3_model_path
-        load_tts_model(t3_model_path, tokenizer_path, device)
-    
-    # Normalize Japanese text if requested
-    if normalize_japanese:
-        text = normalize_japanese_text(text)
+        if seed ==-1:
+            seed = random.randint(0, 1000000000)
+            print(f"Random seed: {seed}")
+        else:
+            seed = int(seed)
+            
+        set_seed(seed)
         
-    if "default_voice.mp3" in voice_file:
-        voice_file = None
+        if not text.strip():
+            raise gr.Error("Please enter text to generate")
+        
+        # Load model if not already loaded or if model path changed
+        if tts_model is None or tts_path != t3_model_path:
+            tts_path = t3_model_path
+            load_tts_model(t3_model_path, tokenizer_path, device)
+        
+        # Normalize Japanese text if requested
+        if normalize_japanese:
+            text = normalize_japanese_text(text)
+            
+        if "default_voice.mp3" in voice_file:
+            voice_file = None
+        
+        try:
+            # Generate audio
+            audio_tensor = tts_model.generate(
+                text=text,
+                audio_prompt_path=voice_file if voice_file else None,
+                exaggeration=exaggeration,
+                cfg_weight=cfg_weight,
+                temperature=temperature,
+                redact=redact,
+                translate_to=translate_to,
+                translation_strength=translation_strength,
+                source_language=source_language
+            )
+            
+            audio_np = audio_tensor.squeeze().numpy()
+            
+            # Return JSON-serializable format for Beam endpoint
+            return {
+                "sample_rate": int(tts_model.sr),
+                "audio_data": audio_np.tolist()
+            }
+            
+        except Exception as e:
+            raise gr.Error(f"Generation failed: {str(e)}")
+except:
+    print("Beam not installed, skipping import")
     
-    try:
-        # Generate audio
-        audio_tensor = tts_model.generate(
-            text=text,
-            audio_prompt_path=voice_file if voice_file else None,
-            exaggeration=exaggeration,
-            cfg_weight=cfg_weight,
-            temperature=temperature,
-            redact=redact,
-            translate_to=translate_to,
-            translation_strength=translation_strength,
-            source_language=source_language
-        )
-        
-        audio_np = audio_tensor.squeeze().numpy()
-        
-        # Return JSON-serializable format for Beam endpoint
-        return {
-            "sample_rate": int(tts_model.sr),
-            "audio_data": audio_np.tolist()
-        }
-        
-    except Exception as e:
-        raise gr.Error(f"Generation failed: {str(e)}")
-    
+
 def generate_speech_local(
     text: str,
     voice_file: str,
