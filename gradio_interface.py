@@ -920,7 +920,7 @@ def upload_t3_model_to_beam(t3_model_path: str) -> str:
             return f"ℹ️ Model {model_filename} already exists in beam t3_models, no upload needed"
         
         # Create the upload command
-        upload_command = f"beam cp {t3_model_path} beam://t3_models"
+        upload_command = f"uv run beam cp {t3_model_path} beam://t3_models"
         
         # Print to terminal for easy copy-paste
         print("\n" + "="*60)
@@ -995,44 +995,39 @@ def create_gradio_interface():
                     label="Voice File",
                     info="Select voice file from voices folder (optional - empty for default)"
                 )
-                enable_language_converions = gr.Checkbox(
-                    label="Enable Language Conversions",
-                    value=True,
-                    info="Enable language conversions"
-                )
-                source_language_dropdown = gr.Dropdown(
-                    choices=["japanese", "english"],
-                    value="english",
-                    label="Reference Audio Language",
-                    info="Language of the reference audio"
-                )
-                translate_to_dropdown = gr.Dropdown(
-                    choices=["japanese", "english"],
-                    value="japanese",
-                    label="Desired Language/Accent",
-                    info="Language/accent to inference text with"
-                )
-                translation_strength_slider = gr.Slider(
-                    minimum=0.0,
-                    maximum=5.0,
-                    value=1.0,
-                    step=0.1,
-                    label="Lang Conversion Strength",
-                    info="Strength of conversion (reccomended 1-2)"
-                )
+                with gr.Accordion("Language Conversion", open=False):
+                    enable_language_converions = gr.Checkbox(
+                        label="Enable Language Conversions",
+                        value=False,
+                        info="Enable language conversions"
+                    )
+                    source_language_dropdown = gr.Dropdown(
+                        choices=["japanese", "english"],
+                        value="english",
+                        label="Reference Audio Language",
+                        info="Language of the reference audio"
+                    )
+                    translate_to_dropdown = gr.Dropdown(
+                        choices=["japanese", "english"],
+                        value="japanese",
+                        label="Desired Language/Accent",
+                        info="Language/accent to inference text with"
+                    )
+                    translation_strength_slider = gr.Slider(
+                        minimum=0.0,
+                        maximum=5.0,
+                        value=1.0,
+                        step=0.1,
+                        label="Lang Conversion Strength",
+                        info="Strength of conversion (reccomended 1-2)"
+                    )
                 
                 refresh_btn = gr.Button("Refresh Dropdowns")
                 
             # Middle Column - Text Input and Inference Parameters
             with gr.Column(scale=2):
                 # Text Input
-                gr.Markdown("### Text Input")
-                text_input = gr.Textbox(
-                    label="Text to Generate",
-                    placeholder="Enter text to convert to speech...",
-                    lines=3
-                )
-                
+                gr.Markdown("### Text Controls")
                 normalize_jp_checkbox = gr.Checkbox(
                     label="Normalize Japanese to Hiragana",
                     value=True,
@@ -1110,7 +1105,7 @@ def create_gradio_interface():
                         label="Beam Status",
                         placeholder="Click 'Launch Beam Deployment' to deploy your endpoint...",
                         lines=6,
-                        max_lines=10,
+                        max_lines=6,
                         interactive=False
                     )
                     
@@ -1129,6 +1124,12 @@ def create_gradio_interface():
                         show_copy_button=True
                     )
                 
+        with gr.Row():
+            text_input = gr.Textbox(
+                label="Text to Generate",
+                placeholder="Enter text to convert to speech...",
+                lines=3
+            )
         with gr.Row():
             generate_btn = gr.Button("Generate Speech", variant="primary", size="lg")
             
