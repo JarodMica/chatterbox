@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import librosa
+from safetensors.torch import load_file
 import torch
 import perth
 from huggingface_hub import hf_hub_download
@@ -71,6 +72,18 @@ class ChatterboxVC:
             local_path = hf_hub_download(repo_id=REPO_ID, filename=fpath)
 
         return cls.from_local(Path(local_path).parent, device)
+    
+    @classmethod
+    def from_specified(cls, device, s3gen_path, conds_path):
+        s3gen = S3Gen()
+        s3gen.load_state_dict(
+            load_file(s3gen_path), strict=False
+        )
+        s3gen.to(device).eval()
+        
+        ref_dict = torch.load(conds_path, map_location=device)
+        
+        return cls(s3gen, device, ref_dict=ref_dict)
 
     def set_target_voice(self, wav_fpath):
         ## Load reference wav
